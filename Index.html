@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+<title>LumenForge — v3.1 (Cloud Sync + Offline Demo)</title>
+<style>
+  :root{
+    --bg:#081612; --surface:#0E221C; --elev:#112A22; --text:#F4FFF9; --muted:#A9C5BA;
+    --gold:#D4AF37; --gold-2:#c49c2f; --good:#74D69D; --warn:#FFD166; --bad:#FF6B6B; --border:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    background: radial-gradient(1200px 600px at 50% -200px, #0b251d 0%, var(--bg) 60%); color:var(--text); }
+  .app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+  header{ position:sticky; top:0; z-index:5; background:linear-gradient(135deg,#0f241d,#123127 40%,#0b221c);
+    padding:14px 16px; border-bottom:1px solid var(--border); display:flex;align-items:center;gap:12px; justify-content:space-between; }
+  .logo{width:34px;height:34px;border-radius:10px;position:relative;
+    background: radial-gradient(65% 65% at 50% 35%, var(--gold), var(--gold-2) 55%, #6e5620 100%);
+    box-shadow:0 0 0 2px rgba(212,175,55,.15), 0 6px 18px rgba(0,0,0,.35);}
+  .logo::after{content:'';position:absolute;inset:6px;border-radius:8px;background:linear-gradient(180deg,#0f261f,#16352b)}
+  h1{font-size:18px;margin:0} .subtitle{font-size:12px; color:var(--muted); margin-top:2px}
+  .auth{display:flex; gap:8px; align-items:center}
+  .btn{ display:inline-flex;align-items:center;justify-content:center;gap:8px; padding:10px 14px;border-radius:12px;border:none;cursor:pointer;
+    background:var(--gold);color:#121212;font-weight:800;box-shadow:0 8px 22px rgba(212,175,55,.25); font-size:14px; text-decoration:none }
+  .btn.secondary{background:#123327;color:var(--text);border:1px solid var(--border);box-shadow:none}
+  .btn.ghost{background:transparent;border:1px dashed var(--border);color:var(--text)}
+  .btn.danger{background:#ff6b6b;color:#1a1a1a}
+  .btn.tiny{padding:6px 8px; font-size:12px; border-radius:8px}
+  .notice{font-size:12px;color:var(--muted)}
+  main{flex:1;padding:16px 16px 92px}
+  .card{ background:linear-gradient(180deg,var(--surface), var(--elev)); border:1px solid var(--border);
+    border-radius:16px; padding:14px; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .kpis{display:grid;grid-template-columns:1fr 1fr; gap:12px}
+  .kpi{padding:12px;border-radius:14px;background:#0f271f;border:1px solid var(--border)}
+  .kpi .label{font-size:12px;color:var(--muted)} .kpi .val{font-size:22px;font-weight:800;margin-top:2px}
+  input,select{ background:#0f271f;color:var(--text);border:1px solid var(--border); padding:12px;border-radius:12px; font-size:16px; outline:none; width:100%; }
+  table{width:100%;border-collapse:collapse} th,td{padding:12px 6px;border-bottom:1px dashed var(--border);font-size:14px; vertical-align:middle}
+  th{text-align:left;color:#dff0e9}
+  .pill{padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px}
+  .pill.income{background:rgba(116,214,157,.18);color:var(--good)} .pill.expense{background:rgba(255,107,107,.18);color:var(--bad)}
+  .totals{background:linear-gradient(180deg,#0f241e,#0c201a); border:1px solid var(--border); border-radius:14px; padding:12px}
+  .totals .rowline{display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .remaining{font-weight:800; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:#0f271f}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="logo"></div>
+      <div><h1>LumenForge</h1><div class="subtitle">Cloud sync (Auth + Firestore) / Offline demo</div></div>
+    </div>
+    <div class="auth">
+      <span id="who" class="notice">Not signed in</span>
+      <button class="btn secondary" id="signin">Sign in with Google</button>
+      <button class="btn ghost" id="demo">Demo sign‑in</button>
+      <button class="btn danger" id="signout" style="display:none">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home">
+      <div class="card">
+        <h2 style="margin:0 0 8px">Start</h2>
+        <p class="notice">Login to sync your data. If you’re offline or just testing, use <b>Demo sign‑in</b> (saves on this device only).</p>
+        <div class="row" style="margin-top:12px">
+          <a class="btn" href="#business">🚀 Business</a>
+          <a class="btn secondary" href="#personal">👤 Personal</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- BUSINESS -->
+    <section id="business" hidden>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Income (month)</div><div class="val" id="biz-income">$0</div></div>
+        <div class="kpi"><div class="label">Expenses (month)</div><div class="val" id="biz-expense">$0</div></div>
+        <div class="kpi" style="grid-column:1/3"><div class="label">Net Profit (month)</div><div class="val" id="biz-net">$0</div></div>
+      </div>
+      <div class="totals" style="margin-top:12px">
+        <div class="rowline">
+          <div class="notice">Monthly totals</div>
+          <div class="remaining" id="biz-remaining-tag">Remaining: $0</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">Add Transaction</h3>
+          <div class="row">
+            <button class="btn secondary" id="biz-export">⌄ Export CSV</button>
+            <button class="btn danger" id="biz-clear">🗑 Clear All</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;flex-direction:column">
+          <div class="row" style="width:100%">
+            <select id="biz-type" style="flex:1"><option>Income</option><option>Expense</option></select>
+            <input id="biz-date" type="date" style="flex:1" />
+          </div>
+          <select id="biz-cat"></select>
+          <input id="biz-desc" placeholder="Description"/>
+          <input id="biz-amt" type="number" step="0.01" placeholder="Amount"/>
+          <button class="btn" id="biz-add">Add</button>
+        </div>
+
+        <div class="row" style="margin-top:12px;justify-content:space-between">
+          <h4 style="margin:0">Categories</h4>
+          <div class="row">
+            <input id="biz-new-cat" placeholder="New category"/>
+            <button class="btn secondary" id="biz-add-cat">Add</button>
+          </div>
+        </div>
+        <div class="chips" id="biz-cats-view" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 0 8px">Transactions</h3>
+        <table>
+          <thead><tr><th style="width:92px">Date</th><th>Type</th><th>Category</th><th>Description</th><th style="text-align:right">Amount</th><th>Actions</th></tr></thead>
+        <tbody id="biz-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PERSONAL -->
+    <section id="personal" hidden>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Income (month)</div><div class="val" id="per-income">$0</div></div>
+        <div class="kpi"><div class="label">Expenses (month)</div><div class="val" id="per-expense">$0</div></div>
+        <div class="kpi" style="grid-column:1/3"><div class="label">Net (month)</div><div class="val" id="per-net">$0</div></div>
+      </div>
+      <div class="totals" style="margin-top:12px">
+        <div class="rowline">
+          <div class="notice">Monthly totals</div>
+          <div class="remaining" id="per-remaining-tag">Remaining: $0</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0 0 8px">Savings Goals</h3>
+          <div class="row">
+            <input id="goal-name" placeholder="Goal (e.g., Emergency Fund)"/>
+            <input id="goal-target" type="number" step="1" placeholder="Target (e.g., 500)"/>
+            <button class="btn secondary" id="goal-add">Add Goal</button>
+          </div>
+        </div>
+        <div id="goals" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0 0 8px">Add Personal Transaction</h3>
+          <div class="row">
+            <button class="btn secondary" id="per-export">⌄ Export CSV</button>
+            <button class="btn danger" id="per-clear">🗑 Clear All</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;flex-direction:column">
+          <div class="row" style="width:100%">
+            <select id="per-type" style="flex:1"><option>Income</option><option>Expense</option></select>
+            <input id="per-date" type="date" style="flex:1"/>
+          </div>
+          <select id="per-cat"></select>
+          <input id="per-desc" placeholder="Description"/>
+          <input id="per-amt" type="number" step="0.01" placeholder="Amount"/>
+          <button class="btn" id="per-add">Add</button>
+        </div>
+
+        <div class="row" style="margin-top:12px;justify-content:space-between">
+          <h4 style="margin:0">Categories</h4>
+          <div class="row">
+            <input id="per-new-cat" placeholder="New category"/>
+            <button class="btn secondary" id="per-add-cat">Add</button>
+          </div>
+        </div>
+        <div class="chips" id="per-cats-view" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 0 8px">Transactions</h3>
+        <table>
+          <thead><tr><th style="width:92px">Date</th><th>Type</th><th>Category</th><th>Description</th><th style="text-align:right">Amount</th><th>Actions</th></tr></thead>
+          <tbody id="per-table"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="tabs" style="position:fixed; z-index:10; bottom:12px; left:0; right:0; display:flex; justify-content:center; pointer-events:none;">
+    <div class="bar" style="pointer-events:auto; background:linear-gradient(180deg,var(--surface), #0b1f19); border:1px solid var(--border); border-radius:18px; padding:8px; display:flex; gap:8px; width:calc(100% - 24px); max-width:520px; box-shadow:0 12px 30px rgba(0,0,0,.35);">
+      <a class="tab active" data-tab="home" href="#home" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 6px; border-radius:12px; color:var(--muted); text-decoration:none; font-size:12px;"><div class="ico">🏠</div>Home</a>
+      <a class="tab" data-tab="business" href="#business" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 6px; border-radius:12px; color:var(--muted); text-decoration:none; font-size:12px;"><div class="ico">📊</div>Business</a>
+      <a class="tab" data-tab="personal" href="#personal" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 6px; border-radius:12px; color:var(--muted); text-decoration:none; font-size:12px;"><div class="ico">👤</div>Personal</a>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDKs (optional when online). Safe to leave here. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore-compat.js"></script>
+
+<script>
+// ---- Mode detection ----
+let demoMode = false;
+let firebaseReady = (typeof firebase !== 'undefined');
+
+// OPTIONAL: paste your config to use real Firebase online
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCwCstZq-hB5RoQx-hbbO414IkiwE-2GdA",
+  authDomain: "lumen-forge1.firebaseapp.com",
+  projectId: "lumen-forge1",
+  storageBucket: "lumen-forge1.firebasestorage.app",
+  messagingSenderId: "138751698495",
+  appId: "1:138751698495:web:0903b4d1c1f1ac581cba8a",
+  measurementId: "G-410LF4R9KG"
+};
+
+if(firebaseReady && firebaseConfig.apiKey !== "YOUR_API_KEY"){
+  firebase.initializeApp(firebaseConfig);
+} else {
+  demoMode = true; // no SDK or no config — use local demo
+}
+
+let auth=null, db=null;
+if(!demoMode && firebaseReady){
+  auth = firebase.auth();
+  db = firebase.firestore();
+  db.enablePersistence().catch(()=>{});
+}
+
+// ---- Router ----
+const sections=['home','business','personal']
+function show(tab){ sections.forEach(id=>document.getElementById(id).hidden = id!==tab);
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab)); window.scrollTo({top:0, behavior:'smooth'}) }
+function route(){ const tab=(location.hash||'#home').replace('#',''); show(sections.includes(tab)?tab:'home') }
+addEventListener('hashchange', route); addEventListener('load', route)
+document.addEventListener('click',(e)=>{ const a=e.target.closest('a[href^="#"]'); if(!a) return; const tab=a.getAttribute('href').replace('#','');
+  if(sections.includes(tab)){ e.preventDefault(); show(tab); try{history.replaceState(null,'','#'+tab)}catch(_){}}})
+
+// ---- Utilities ----
+const fmt = n => '$'+Number(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})
+const today = () => new Date().toISOString().slice(0,10)
+function saveLS(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
+function loadLS(k,f){ try{ return JSON.parse(localStorage.getItem(k)) ?? f } catch(_){ return f } }
+
+// ---- State ----
+const state = {
+  user:null,
+  biz:{ txns:[], categories:['Haircut','Tips','Product Sales','Supplies','Rent','Marketing','Utilities','Misc'] },
+  per:{ txns:[], categories:['Paycheck','Food','Transport','Phone','Fun','Savings','Rent/Room','Clothes','Other'], goals:[] }
+}
+
+function updateTotals(scope){
+  const txns = state[scope].txns;
+  const inc = txns.filter(t=>t.type==='Income').reduce((a,b)=>a+b.amount,0)
+  const exp = txns.filter(t=>t.type==='Expense').reduce((a,b)=>a+b.amount,0)
+  const remain = inc-exp;
+  const tag = document.getElementById(scope==='biz'?'biz-remaining-tag':'per-remaining-tag')
+  tag.textContent = `Remaining: ${fmt(remain)}`
+  tag.style.background = remain>=0 ? 'rgba(116,214,157,.18)' : 'rgba(255,107,107,.18)'
+  tag.style.color = remain>=0 ? 'var(--good)' : 'var(--bad)'
+  document.getElementById(scope==='biz'?'biz-income':'per-income').textContent = fmt(inc)
+  document.getElementById(scope==='biz'?'biz-expense':'per-expense').textContent = fmt(exp)
+  document.getElementById(scope==='biz'?'biz-net':'per-net').textContent = fmt(inc-exp)
+}
+function renderCats(scope){
+  const sel = document.getElementById(scope==='biz'?'biz-cat':'per-cat')
+  const wrap = document.getElementById(scope==='biz'?'biz-cats-view':'per-cats-view')
+  const cats = state[scope].categories || []
+  if(sel) sel.innerHTML = cats.map(c=>`<option>${c}</option>`).join('')
+  if(wrap){
+    wrap.innerHTML=''
+    cats.forEach((c,idx)=>{
+      const chip=document.createElement('span'); chip.className='chip'
+      chip.innerHTML=`${c} <button title="Rename" data-${scope}-cact="edit" data-idx="${idx}">📝</button><button title="Delete" data-${scope}-cact="del" data-idx="${idx}">✖</button>`
+      wrap.appendChild(chip)
+    })
+  }
+}
+function renderGoals(){
+  const wrap = document.getElementById('goals'); if(!wrap) return
+  wrap.innerHTML = (state.per.goals||[]).map((g,i)=>{
+    const pct = Math.min(100, Math.round((g.current||0)/Math.max(1,g.target)*100))
+    return `<div class="card" style="padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>${g.name}</strong><span class="notice">${fmt(g.current||0)} / ${fmt(g.target)}</span>
+      </div>
+      <div class="remaining" style="margin-top:6px">${pct}%</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn tiny secondary" data-goal="add" data-idx="${i}">+ Add $</button>
+        <button class="btn tiny danger" data-goal="del" data-idx="${i}">Remove</button>
+      </div>
+    </div>`
+  }).join('')
+}
+function renderTable(scope){
+  const tbody = document.getElementById(scope==='biz'?'biz-table':'per-table')
+  tbody.innerHTML = state[scope].txns.map(t=>`<tr>
+    <td>${t.date}</td><td><span class="pill ${t.type.toLowerCase()}">${t.type}</span></td>
+    <td>${t.category||''}</td><td>${t.desc||''}</td><td style="text-align:right">${fmt(t.amount)}</td>
+    <td><button class="btn tiny secondary" data-edit="${scope}" data-id="${t.id||t._id}">Edit</button>
+        <button class="btn tiny danger" data-del="${scope}" data-id="${t.id||t._id}">Del</button></td></tr>`).join('')
+}
+
+// ---- Demo persistence (local) ----
+function demoKey(scope){ return 'lf_demo_'+scope }
+function loadDemo(scope){
+  const d = loadLS(demoKey(scope), {txns:[], categories: state[scope].categories, goals: state.per.goals})
+  state[scope].txns = d.txns||[]
+  if(d.categories) state[scope].categories = d.categories
+  if(scope==='per' && d.goals) state.per.goals = d.goals
+}
+function saveDemo(scope){
+  const payload = {txns: state[scope].txns, categories: state[scope].categories}
+  if(scope==='per') payload.goals = state.per.goals
+  saveLS(demoKey(scope), payload)
+}
+
+// ---- Auth Handlers ----
+const who = document.getElementById('who')
+const btnIn = document.getElementById('signin')
+const btnOut = document.getElementById('signout')
+const btnDemo = document.getElementById('demo')
+
+async function signInGoogle(){
+  if(demoMode){ return alert('Firebase not available here. Use Demo sign‑in or deploy online with config.') }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  await auth.signInWithPopup(provider);
+}
+function signInDemo(){
+  demoMode = true
+  state.user = {uid:'demo-user', displayName:'Demo User'}
+  who.textContent = `Demo: ${state.user.displayName}`
+  btnOut.style.display='inline-flex'
+  btnIn.style.display='inline-flex' // keep visible so you can try real auth when online
+  // load demo data
+  loadDemo('biz'); loadDemo('per'); refreshAll()
+}
+function signOutAll(){
+  state.user = null
+  who.textContent = 'Not signed in'
+  if(!demoMode && auth) auth.signOut().catch(()=>{})
+  btnOut.style.display='none'
+}
+
+btnIn.addEventListener('click', signInGoogle)
+btnDemo.addEventListener('click', signInDemo)
+btnOut.addEventListener('click', signOutAll)
+
+if(!demoMode && firebaseReady){
+  auth.onAuthStateChanged(async (user)=>{
+    state.user = user || null
+    who.textContent = user ? `Signed in as ${user.displayName||user.email}` : 'Not signed in'
+    btnOut.style.display = user? 'inline-flex':'none'
+    if(user){ attachRealtime('biz'); attachRealtime('per') }
+  })
+}
+
+// ---- Firestore (when available) ----
+function paths(uid, scope){
+  return {
+    txns: db.collection('users').doc(uid).collection('spaces').doc(scope).collection('transactions'),
+    meta: db.collection('users').doc(uid).collection('spaces').doc(scope).collection('meta').doc('settings')
+  }
+}
+let unsubBiz=null, unsubPer=null
+function attachRealtime(scope){
+  if(!state.user || demoMode) return
+  const ps = paths(state.user.uid, scope==='biz'?'business':'personal')
+  const unsubscribe = ps.txns.orderBy('date','desc').limit(500).onSnapshot(snap=>{
+    state[scope].txns = snap.docs.map(d=>({id:d.id, ...d.data()}))
+    refreshScope(scope)
+  })
+  if(scope==='biz'){ if(unsubBiz) unsubBiz(); unsubBiz = unsubscribe } else { if(unsubPer) unsubPer = unsubscribe }
+  ps.meta.get().then(doc=>{
+    const data = doc.exists? doc.data(): {}
+    if(data.categories) state[scope].categories = data.categories
+    if(scope==='per' && data.goals) state.per.goals = data.goals
+    refreshScope(scope)
+  })
+}
+async function saveMeta(scope){
+  if(demoMode || !state.user) return saveDemo(scope)
+  const ps = paths(state.user.uid, scope==='biz'?'business':'personal')
+  const payload = {}
+  if(scope==='biz') payload.categories = state.biz.categories
+  if(scope==='per'){ payload.categories = state.per.categories; payload.goals = state.per.goals }
+  await ps.meta.set(payload, {merge:true})
+}
+
+// ---- CRUD (demo OR firestore) ----
+async function addTxn(scope){
+  const type=document.getElementById(scope==='biz'?'biz-type':'per-type').value
+  const date=document.getElementById(scope==='biz'?'biz-date':'per-date').value || today()
+  const cat=document.getElementById(scope==='biz'?'biz-cat':'per-cat').value
+  const desc=document.getElementById(scope==='biz'?'biz-desc':'per-desc').value
+  const amt=Math.abs(parseFloat(document.getElementById(scope==='biz'?'biz-amt':'per-amt').value||0))
+  if(!amt) return alert('Enter an amount')
+  if(demoMode || !state.user){
+    const _id = Date.now().toString(36)+Math.random().toString(36).slice(2,6)
+    state[scope].txns.unshift({ _id, date, type, category:cat, desc, amount:amt })
+    saveDemo(scope); refreshScope(scope)
+  } else {
+    const ps=paths(state.user.uid, scope==='biz'?'business':'personal')
+    await ps.txns.add({date,type,category:cat,desc,amount:amt,createdAt:firebase.firestore.FieldValue.serverTimestamp()})
+  }
+  document.getElementById(scope==='biz'?'biz-amt':'per-amt').value=''
+  document.getElementById(scope==='biz'?'biz-desc':'per-desc').value=''
+}
+async function editTxn(scope, id){
+  const list = state[scope].txns
+  const t = list.find(x=> (x.id||x._id)===id); if(!t) return
+  const date = prompt('Date (YYYY-MM-DD):', t.date) || t.date
+  const type = prompt('Type (Income/Expense):', t.type) || t.type
+  const category = prompt('Category:', t.category||'') || t.category
+  const desc = prompt('Description:', t.desc||'') || t.desc
+  let amount = prompt('Amount:', String(t.amount)); amount = Math.abs(parseFloat(amount||t.amount))||t.amount
+  if(demoMode || !state.user){
+    Object.assign(t, {date,type,category,desc,amount}); saveDemo(scope); refreshScope(scope)
+  } else {
+    const ps=paths(state.user.uid, scope==='biz'?'business':'personal'); await ps.txns.doc(id).set({date,type,category,desc,amount},{merge:true})
+  }
+}
+async function deleteTxn(scope, id){
+  if(!confirm('Delete this transaction?')) return
+  if(demoMode || !state.user){
+    state[scope].txns = state[scope].txns.filter(x=> (x.id||x._id)!==id); saveDemo(scope); refreshScope(scope)
+  } else {
+    const ps=paths(state.user.uid, scope==='biz'?'business':'personal'); await ps.txns.doc(id).delete()
+  }
+}
+async function clearAll(scope){
+  if(!confirm('Clear ALL transactions?')) return
+  if(demoMode || !state.user){ state[scope].txns = []; saveDemo(scope); refreshScope(scope) }
+  else {
+    const ps=paths(state.user.uid, scope==='biz'?'business':'personal')
+    const snap = await ps.txns.get(); const batch = db.batch(); snap.forEach(d=>batch.delete(d.ref)); await batch.commit()
+  }
+}
+
+// ---- Events ----
+document.addEventListener('click', (e)=>{
+  if(e.target.id==='biz-add') addTxn('biz')
+  if(e.target.id==='per-add') addTxn('per')
+
+  if(e.target.dataset.edit==='biz') editTxn('biz', e.target.dataset.id)
+  if(e.target.dataset.edit==='per') editTxn('per', e.target.dataset.id)
+  if(e.target.dataset.del==='biz') deleteTxn('biz', e.target.dataset.id)
+  if(e.target.dataset.del==='per') deleteTxn('per', e.target.dataset.id)
+
+  if(e.target.id==='biz-clear') clearAll('biz')
+  if(e.target.id==='per-clear') clearAll('per')
+
+  if(e.target.id==='biz-add-cat'){
+    const v=document.getElementById('biz-new-cat').value.trim(); if(!v) return
+    if(!state.biz.categories.includes(v)) state.biz.categories.push(v)
+    document.getElementById('biz-new-cat').value=''; renderCats('biz'); saveMeta('biz')
+  }
+  if(e.target.id==='per-add-cat'){
+    const v=document.getElementById('per-new-cat').value.trim(); if(!v) return
+    if(!state.per.categories.includes(v)) state.per.categories.push(v)
+    document.getElementById('per-new-cat').value=''; renderCats('per'); saveMeta('per')
+  }
+  if(e.target.dataset.bizCact==='edit'){
+    const i=+e.target.dataset.idx; const cur=state.biz.categories[i]
+    const nv=prompt('Rename category:', cur); if(nv && nv.trim()){ state.biz.categories[i]=nv.trim(); renderCats('biz'); saveMeta('biz') }
+  }
+  if(e.target.dataset.bizCact==='del'){
+    const i=+e.target.dataset.idx; const name=state.biz.categories[i]
+    if(!confirm('Delete category "'+name+'"?')) return
+    state.biz.categories.splice(i,1); renderCats('biz'); saveMeta('biz')
+  }
+  if(e.target.id==='goal-add'){
+    const name = document.getElementById('goal-name').value.trim()
+    const target = Math.abs(parseFloat(document.getElementById('goal-target').value||0))||0
+    if(!name || !target) return alert('Enter goal + target')
+    state.per.goals.push({name, target, current:0})
+    document.getElementById('goal-name').value=''; document.getElementById('goal-target').value=''
+    renderGoals(); saveMeta('per')
+  }
+  if(e.target.dataset.goal==='add'){
+    const i=+e.target.dataset.idx; const add = Math.abs(parseFloat(prompt('Add amount:','50')||0))
+    if(add){ state.per.goals[i].current = (state.per.goals[i].current||0)+add; renderGoals(); saveMeta('per') }
+  }
+  if(e.target.dataset.goal==='del'){
+    const i=+e.target.dataset.idx; if(confirm('Remove this goal?')){ state.per.goals.splice(i,1); renderGoals(); saveMeta('per') }
+  }
+
+  if(e.target.id==='biz-export'){
+    const rows=[['date','type','category','description','amount'], ...state.biz.txns.map(t=>[t.date,t.type,t.category,t.desc,t.amount])]
+    downloadCSV('lumenforge_business.csv', rows)
+  }
+  if(e.target.id==='per-export'){
+    const rows=[['date','type','category','description','amount'], ...state.per.txns.map(t=>[t.date,t.type,t.category,t.desc,t.amount])]
+    downloadCSV('lumenforge_personal.csv', rows)
+  }
+})
+
+function downloadCSV(filename, rows){
+  const csv = rows.map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\\n')
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'})
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=filename; a.click()
+  setTimeout(()=>URL.revokeObjectURL(url), 1200)
+}
+
+// ---- Refresh ----
+function refreshScope(scope){
+  updateTotals(scope); renderCats(scope); if(scope==='per') renderGoals(); renderTable(scope)
+}
+function refreshAll(){ refreshScope('biz'); refreshScope('per') }
+
+// Init
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('biz-date').value = today()
+  document.getElementById('per-date').value = today()
+  // If no firebase, allow instant demo
+  if(demoMode){ who.textContent='Demo mode (local only) — click Demo sign‑in'; }
+  route(); renderCats('biz'); renderCats('per'); renderGoals()
+})
+</script>
+
+<!-- Firestore rules snippet (for when you deploy) -->
+<!--
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /spaces/{spaceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        match /transactions/{docId} { allow read, write: if request.auth.uid == userId; }
+        match /meta/{docId}         { allow read, write: if request.auth.uid == userId; }
+      }
+    }
+  }
+}
+-->
+</body>
+</html>
